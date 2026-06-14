@@ -1,9 +1,0 @@
-services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_DB: neko_pkm_vector
-      POSTGRES_USER: wenxi
-      POSTGRES_PASSWORD: 19821220
