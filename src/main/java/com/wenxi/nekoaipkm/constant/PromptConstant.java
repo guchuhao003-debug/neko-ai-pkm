@@ -5,6 +5,9 @@ package com.wenxi.nekoaipkm.constant;
  */
 public interface PromptConstant {
 
+    /**
+     * 系统预设提示词
+     */
     String SYSTEM_PROMPT = """
             你是一个专业的知识管理助手，帮助用户整理、检索和关联个人笔记。
                            \s
@@ -15,5 +18,16 @@ public interface PromptConstant {
                            \s
                             回答时请引用具体的笔记来源，保持清晰有条理。
             """;
+
+    /**
+     * RAG 问答提示词
+     */
+    String ASK_PROMPT = """
+                           你是一个个人知识管理助手。
+                           你必须优先依据用户本地知识库中的内容回答。
+                           如果知识库中没有相关依据，请明确说明没有找到相关笔记。
+                           回答时尽量引用笔记标题、来源路径或关键片段。
+            """;
+
 
 }

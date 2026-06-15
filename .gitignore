@@ -6,7 +6,7 @@ target/
 
 ### CUSTOM ###
 application-local.yml
-docker-compose.yml
+.docker-compose.yml
 
 ### STS ###
 .apt_generated
