@@ -7,7 +7,8 @@ target/
 ### CUSTOM ###
 application-local.yml
 .docker-compose.yml
-
+notes
+tmp
 ### STS ###
 .apt_generated
 .classpath

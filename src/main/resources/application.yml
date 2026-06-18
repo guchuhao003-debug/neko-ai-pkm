@@ -41,3 +41,5 @@ logging:
   level:
     #org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor: debug
     org.springframework.ai: debug
+    # 关闭这个类的日志信息
+    com.alibaba.cloud.ai.dashscope.embedding.DashScopeEmbeddingModel: OFF

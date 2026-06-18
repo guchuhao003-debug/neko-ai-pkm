@@ -32,7 +32,7 @@ public class ChatService {
     @Value("${pkm.rag.top-k:5}")
     private Integer topK;
 
-    @Value("${pkm.rag.similarity-threshold:0.70}")
+    @Value("${pkm.rag.similarity-threshold:0.0}")
     private Double similarityThreshold;
 
     /**

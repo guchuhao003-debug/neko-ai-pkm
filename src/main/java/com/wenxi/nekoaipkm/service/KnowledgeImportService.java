@@ -5,8 +5,8 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.wenxi.nekoaipkm.mapper.NoteMapper;
-import com.wenxi.nekoaipkm.model.vo.ImportResponse;
 import com.wenxi.nekoaipkm.model.entity.Note;
+import com.wenxi.nekoaipkm.model.vo.ImportResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -19,12 +19,15 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +57,12 @@ public class KnowledgeImportService {
 
     @Value("${pkm.notes.path:./notes}")
     private String notesBasePath;
+
+    @Value("${pkm.upload.temp.path:./tmp/uploads}")
+    private String uploadTempPath;
+
+    // 文本块数量
+    private static final int EMBEDDING_BATCH_SIZE = 20;
 
     /**
      * 扫描本地笔记目录，增量导入发生变化的 MarkDown 文档
@@ -86,13 +95,35 @@ public class KnowledgeImportService {
     }
 
     /**
+     * 导入扫描目录中的 markdown 文件
+     *
+     * @param markdownFile  markdown 文件路径
+     * @return  true-发生导入或更新， false-跳过
+     */
+    @Transactional
+    public boolean importMarkdownIfChanged(Path markdownFile) {
+        return importMarkdownIfChanged(markdownFile,"markdown",markdownFile.toAbsolutePath().toString());
+    }
+
+    /**
+     * 导入上传目录的 markdown 文件
+     *
+     * @param markdownFile    临时 markdown 文件路径
+     * @param sourcePath    COS 来源路径
+     * @return   true 表示发生导入或更新，false 表示跳过
+     */
+    @Transactional
+    public boolean importUploadedMarkdown(Path markdownFile, String sourcePath) {
+        return importMarkdownIfChanged(markdownFile, "upload", sourcePath);
+    }
+
+    /**
      * 导入单个 MarkDown 文件，如果内容没有变化则跳过
      *
      * @param markdownFile MarkDown 文件路径
      * @return  true 表示发生导入或更新， false 表示跳过
      */
-    public boolean importMarkdownIfChanged(Path markdownFile) {
-        String sourcePath = markdownFile.toAbsolutePath().toString();
+    private boolean importMarkdownIfChanged(Path markdownFile, String sourceType, String sourcePath) {
         String content = readFileContent(markdownFile);
         String contentHash = SecureUtil.sha256(content);
         // 根据源路径获取笔记
@@ -105,13 +136,14 @@ public class KnowledgeImportService {
             return false;
         }
 
-        Note note = saveOrUpdateNote(existingNote, markdownFile, content, contentHash);
+        Note note = saveOrUpdateNote(existingNote, markdownFile, content, contentHash, sourceType,
+                sourcePath);
 
         // 文件更新后必须先删除旧的向量块，避免同一笔记被重复检索
         deleteOldVectorChunks(note.getId());
 
         List<Document> chunks = readAndSplitMarkdown(markdownFile, note);
-        vectorStore.add(chunks);
+        addChunksInBatches(chunks);
 
         note.setVectorized(true);
         note.setUpdatedAt(LocalDateTime.now());
@@ -170,7 +202,9 @@ public class KnowledgeImportService {
      * @param contentHash
      * @return
      */
-    private Note saveOrUpdateNote(Note existingNote, Path markdownFile, String content, String contentHash) {
+    private Note saveOrUpdateNote(Note existingNote, Path markdownFile, String content, String contentHash,
+                                  String sourceType, String sourcePath) {
+
         LocalDateTime now = LocalDateTime.now();
         Note note = existingNote == null ? new Note() : existingNote;
 
@@ -178,11 +212,11 @@ public class KnowledgeImportService {
         if (existingNote == null) {
             note.setId(IdUtil.fastSimpleUUID());
             note.setCreatedAt(now);
-            note.setSourceType("markdown");
-            note.setSourcePath(markdownFile.toAbsolutePath().toString());
         }
 
         note.setTitle(resolveTitle(markdownFile, content));
+        note.setSourceType(sourceType);
+        note.setSourcePath(sourcePath);
         note.setContentHash(contentHash);
         note.setUpdatedAt(now);
         note.setWordCount(content.length());
@@ -196,6 +230,29 @@ public class KnowledgeImportService {
             noteMapper.updateById(note);
         }
         return note;
+    }
+
+    /**
+     * 保存上传 Markdown 的临时副本，后续交给导入任务处理。
+     *
+     * @param file 上传文件
+     * @return 临时文件路径
+     */
+    public Path saveUploadedMarkdownToTemp(MultipartFile file) {
+        Path tempDir = Paths.get(uploadTempPath);
+        createNotesDirectoryIfNeeded(tempDir);
+
+        String originalFileName = file.getOriginalFilename();
+        String safeFileName = Paths.get(originalFileName).getFileName().toString();
+        String targetFileName = IdUtil.fastSimpleUUID() + "-" + safeFileName;
+        Path targetPath = tempDir.resolve(targetFileName);
+
+        try (InputStream inputStream = file.getInputStream()) {
+            Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            return targetPath;
+        } catch (IOException e) {
+            throw new IllegalStateException("保存上传临时文件失败：" + safeFileName, e);
+        }
     }
 
     /**
@@ -288,6 +345,18 @@ public class KnowledgeImportService {
                 noteId
         );
         return count != null && count > 0;
+    }
+
+    /**
+     * 分批写入向量数据库，避免 DashScope Embedding 单次输入超过限制。
+     *
+     * @param chunks 文档块列表
+     */
+    private void addChunksInBatches(List<Document> chunks) {
+        for (int start = 0; start < chunks.size(); start += EMBEDDING_BATCH_SIZE) {
+            int end = Math.min(start + EMBEDDING_BATCH_SIZE, chunks.size());
+            vectorStore.add(chunks.subList(start, end));
+        }
     }
 
 }

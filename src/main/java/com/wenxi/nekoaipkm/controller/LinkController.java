@@ -3,12 +3,11 @@ package com.wenxi.nekoaipkm.controller;
 import com.wenxi.nekoaipkm.model.vo.LinkCandidateResponse;
 import com.wenxi.nekoaipkm.service.LinkRecommendationService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 笔记链接推荐接口
@@ -30,6 +29,19 @@ public class LinkController {
     @PostMapping("/recommend/{noteId}")
     public List<LinkCandidateResponse> recommend(@PathVariable String noteId) {
         return linkRecommendationService.recommendLinks(noteId);
+    }
+
+    /**
+     * 提交后台推荐任务，接口立即返回。
+     *
+     * @param noteId 源笔记 ID
+     * @return 任务提交结果
+     */
+    @PostMapping("/recommend/{noteId}/tasks")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public Map<String, String> recommendInBackground(@PathVariable String noteId) {
+        linkRecommendationService.recommendLinksInBackground(noteId);
+        return Map.of("message","链接推荐任务已提交");
     }
 
 }

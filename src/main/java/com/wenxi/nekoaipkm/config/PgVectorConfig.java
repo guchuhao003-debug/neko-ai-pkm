@@ -37,8 +37,8 @@ public class PgVectorConfig {
                 .schemaName("public")
                 // 表示 Spring AI PgVectorStore 使用的向量表名
                 .vectorTableName("vector_store")
-                // 表示批量写入向量时，每批最多写入 1000 个 Document。
-                .maxDocumentBatchSize(1000)
+                // 表示批量写入向量时，每批最多写入 20 个 Document。
+                .maxDocumentBatchSize(20)
                 .build();
     }
 
