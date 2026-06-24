@@ -1,6 +1,6 @@
-package com.wenxi.nekoaipkm.config;
+package com.wenxi.nekoaipkm.service;
 
-import com.wenxi.nekoaipkm.service.WeeklyDigestService;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -12,13 +12,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class KnowledgeScheduleTask {
 
-    private final WeeklyDigestService weeklyDigestService;
+    private final  WeeklyDigestTaskService weeklyDigestTaskService;
 
-    /**
-     * 每周一上午 9 点生成上一周期的知识回顾。
-     */
-    @Scheduled(cron = "0 0 9 * * MON")
+    @Scheduled(cron = "0 0 9 * * MON", zone = "Asia/Shanghai")
     public void generateWeeklyDigest() {
-        weeklyDigestService.generateCurrentWeekDigest();
+        String taskId = weeklyDigestTaskService.createTask();
+        weeklyDigestTaskService.generateCurrentWeekDigestAsync(taskId);
     }
 }

@@ -52,4 +52,31 @@ public class WeeklyDigest {
      */
     private LocalDateTime createdAt;
 
+
+    /**
+     * 周报内容生成时间。
+     */
+    private LocalDateTime generatedAt;
+
+    /**
+     * 本次周报纳入的笔记数量。
+     */
+    private Integer noteCount;
+
+    /**
+     * 周报 Prompt 版本，用于后续追踪生成策略变化。
+     */
+    private String promptVersion;
+
+    /**
+     * 周报生成或发送失败时的错误信息。
+     */
+    private String errorMessage;
+
+    /**
+     * 失败重试次数。
+     */
+    private Integer retryCount;
+
+
 }
